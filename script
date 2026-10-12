@@ -1,0 +1,2388 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local parentFolder = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+
+if parentFolder:FindFirstChild("MenuOuroTP") then
+    parentFolder.MenuOuroTP:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MenuOuroTP"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = parentFolder
+
+-- ============================================================================
+-- 1. HUD & BOTÕES FLUTUANTES DE MIRA
+-- ============================================================================
+
+local hudMaisProximo = Instance.new("TextLabel")
+hudMaisProximo.Name = "HUD_MaisProximo"
+hudMaisProximo.Size = UDim2.new(0, 250, 0, 40)
+hudMaisProximo.Position = UDim2.new(1, -265, 0, 45)
+hudMaisProximo.BackgroundTransparency = 1
+hudMaisProximo.TextColor3 = Color3.fromRGB(0, 255, 255)
+hudMaisProximo.TextStrokeTransparency = 0.2
+hudMaisProximo.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+hudMaisProximo.TextSize = 14
+hudMaisProximo.Font = Enum.Font.SourceSansBold
+hudMaisProximo.TextXAlignment = Enum.TextXAlignment.Right
+hudMaisProximo.Text = "Mais Próximo: Nenhum"
+hudMaisProximo.Visible = false
+hudMaisProximo.Parent = screenGui
+
+local btnAim = Instance.new("TextButton")
+btnAim.Name = "BtnAimLock"
+btnAim.Size = UDim2.new(0, 170, 0, 32)
+btnAim.Position = UDim2.new(0, 15, 0, 50)
+btnAim.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+btnAim.Text = "Mira Auto: OFF"
+btnAim.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnAim.TextSize = 13
+btnAim.Font = Enum.Font.SourceSansBold
+btnAim.Visible = false
+btnAim.Parent = screenGui
+
+local cAim = Instance.new("UICorner")
+cAim.CornerRadius = UDim.new(0, 6)
+cAim.Parent = btnAim
+
+-- Botão Padrão de Trocar Alvo
+local btnAimUpdate = Instance.new("TextButton")
+btnAimUpdate.Name = "BtnAimUpdate"
+btnAimUpdate.Size = UDim2.new(0, 180, 0, 35)
+btnAimUpdate.Position = UDim2.new(0.60, 0, 0, 0)
+btnAimUpdate.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+btnAimUpdate.Text = "Trocar p/ Mais Próximo"
+btnAimUpdate.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnAimUpdate.TextSize = 12
+btnAimUpdate.Font = Enum.Font.SourceSansBold
+btnAimUpdate.Visible = false
+btnAimUpdate.Parent = screenGui
+
+local cAimUp = Instance.new("UICorner")
+cAimUp.CornerRadius = UDim.new(0, 6)
+cAimUp.Parent = btnAimUpdate
+
+-- NOVO BOTÃO ROXO: AIMBOT MELHORADO (SUAVE / HOLD)
+local btnAimMelhorado = Instance.new("TextButton")
+btnAimMelhorado.Name = "BtnAimMelhorado"
+btnAimMelhorado.Size = UDim2.new(0, 180, 0, 35)
+btnAimMelhorado.Position = UDim2.new(0.60, 0, 0, 0) -- Mesma posição do btnAimUpdate
+btnAimMelhorado.BackgroundColor3 = Color3.fromRGB(140, 50, 200) -- ROXO
+btnAimMelhorado.Text = "🎯 Segurar: Mira Suave"
+btnAimMelhorado.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnAimMelhorado.TextSize = 12
+btnAimMelhorado.Font = Enum.Font.SourceSansBold
+btnAimMelhorado.Visible = false
+btnAimMelhorado.Parent = screenGui
+
+local cAimMelhorado = Instance.new("UICorner")
+cAimMelhorado.CornerRadius = UDim.new(0, 6)
+cAimMelhorado.Parent = btnAimMelhorado
+
+local segurandoMiraMelhorada = false
+
+-- Eventos de Segurar e Soltar o Botão Roxo
+btnAimMelhorado.MouseButton1Down:Connect(function()
+    segurandoMiraMelhorada = true
+end)
+
+btnAimMelhorado.MouseButton1Up:Connect(function()
+    segurandoMiraMelhorada = false
+end)
+
+btnAimMelhorado.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        segurandoMiraMelhorada = false
+    end
+end)
+
+local tracerFrame = Instance.new("Frame")
+tracerFrame.Name = "TracerLine"
+tracerFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+tracerFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+tracerFrame.BorderSizePixel = 0
+tracerFrame.Visible = false
+tracerFrame.Parent = screenGui
+
+local function desenharLinha(p1, p2)
+    local distancia = (p1 - p2).Magnitude
+    local centro = (p1 + p2) / 2
+    local angulo = math.atan2(p2.Y - p1.Y, p2.X - p1.X)
+
+    tracerFrame.Size = UDim2.new(0, distancia, 0, 2)
+    tracerFrame.Position = UDim2.new(0, centro.X, 0, centro.Y)
+    tracerFrame.Rotation = math.deg(angulo)
+    tracerFrame.Visible = true
+end
+
+-- ============================================================================
+-- 2. JANELA PRINCIPAL E CONTROLES
+-- ============================================================================
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, 230, 0, 370)
+frame.Position = UDim2.new(0.5, -115, 0.4, -185)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.ClipsDescendants = true
+frame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -35, 0, 30)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "⚡ Painel de Ações"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.SourceSansBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = frame
+
+local btnToggle = Instance.new("TextButton")
+btnToggle.Size = UDim2.new(0, 22, 0, 22)
+btnToggle.Position = UDim2.new(1, -26, 0, 4)
+btnToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+btnToggle.Text = "-"
+btnToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnToggle.TextSize = 16
+btnToggle.Font = Enum.Font.SourceSansBold
+btnToggle.Parent = frame
+
+local cToggle = Instance.new("UICorner")
+cToggle.CornerRadius = UDim.new(0, 4)
+cToggle.Parent = btnToggle
+
+local miniBtn = Instance.new("TextButton")
+miniBtn.Name = "MiniHUD"
+miniBtn.Size = UDim2.new(0, 42, 0, 42)
+miniBtn.Position = UDim2.new(0.5, -21, 0.4, -21)
+miniBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+miniBtn.Text = "⚡"
+miniBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+miniBtn.TextSize = 22
+miniBtn.Font = Enum.Font.SourceSansBold
+miniBtn.Active = true
+miniBtn.Draggable = true
+miniBtn.Visible = false
+miniBtn.Parent = screenGui
+
+local miniCorner = Instance.new("UICorner")
+miniCorner.CornerRadius = UDim.new(0, 10)
+miniCorner.Parent = miniBtn
+
+local miniStroke = Instance.new("UIStroke")
+miniStroke.Color = Color3.fromRGB(0, 255, 200)
+miniStroke.Thickness = 2
+miniStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+miniStroke.Parent = miniBtn
+
+btnToggle.MouseButton1Click:Connect(function()
+    miniBtn.Position = UDim2.new(
+        frame.Position.X.Scale, frame.Position.X.Offset + (frame.Size.X.Offset / 2) - 21,
+        frame.Position.Y.Scale, frame.Position.Y.Offset + 10
+    )
+    frame.Visible = false
+    miniBtn.Visible = true
+end)
+
+miniBtn.MouseButton1Click:Connect(function()
+    frame.Position = UDim2.new(
+        miniBtn.Position.X.Scale, miniBtn.Position.X.Offset - (frame.Size.X.Offset / 2) + 21,
+        miniBtn.Position.Y.Scale, miniBtn.Position.Y.Offset - 10
+    )
+    miniBtn.Visible = false
+    frame.Visible = true
+end)
+
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, 0, 1, -30)
+content.Position = UDim2.new(0, 0, 0, 30)
+content.BackgroundTransparency = 1
+content.Parent = frame
+
+local pages = {}
+
+local function criarPagina(nome)
+    local p = Instance.new("Frame")
+    p.Name = nome
+    p.Size = UDim2.new(1, 0, 1, 0)
+    p.BackgroundTransparency = 1
+    p.Visible = false
+    p.Parent = content
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 6)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = p
+
+    pages[nome] = p
+    return p
+end
+
+local function mostrarPagina(nome)
+    for pName, pageObj in pairs(pages) do
+        pageObj.Visible = (pName == nome)
+    end
+end
+
+local function criarBotao(pagina, texto, cor, ordem)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.BackgroundColor3 = cor
+    btn.Text = texto
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.SourceSansBold
+    btn.LayoutOrder = ordem
+    btn.Parent = pages[pagina]
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = btn
+    
+    return btn
+end
+
+-- ============================================================================
+-- ESTRUTURA DE PÁGINAS E CATEGORIAS
+-- ============================================================================
+
+criarPagina("Main")
+local btnCatJogos = criarBotao("Main", "🎮 Jogos", Color3.fromRGB(130, 50, 180), 1)
+local btnCatFPS = criarBotao("Main", "🎯 FPS (Combat)", Color3.fromRGB(180, 70, 30), 2)
+local btnCatUtilidades = criarBotao("Main", "🛠️ Utilidades", Color3.fromRGB(0, 140, 140), 3)
+local btnCatDex = criarBotao("Main", "📁 Dex Explorer >", Color3.fromRGB(0, 120, 215), 4)
+
+criarPagina("Jogos")
+local btnCatEB = criarBotao("Jogos", "Exército Brasileiro Delta", Color3.fromRGB(45, 110, 60), 1)
+local btnVoltarJogos = criarBotao("Jogos", "< Voltar", Color3.fromRGB(60, 60, 65), 2)
+
+criarPagina("EB")
+local btnOuro = criarBotao("EB", "Remover Hold (Ouro)", Color3.fromRGB(212, 175, 55), 1)
+btnOuro.TextColor3 = Color3.fromRGB(0, 0, 0)
+local btnTP = criarBotao("EB", "Teleportar Área Entrega", Color3.fromRGB(40, 130, 220), 2)
+local btnVoltarEB = criarBotao("EB", "< Voltar", Color3.fromRGB(60, 60, 65), 3)
+
+criarPagina("FPS")
+local btnESP = criarBotao("FPS", "SP/ESP Geral: OFF", Color3.fromRGB(180, 50, 50), 1)
+local btnSPEspecifico = criarBotao("FPS", "SP Específico: OFF", Color3.fromRGB(180, 50, 50), 2)
+local btnESPParte = criarBotao("FPS", "🔍 ESP por Parte/Item", Color3.fromRGB(230, 140, 30), 3)
+local btnESPDistancia = criarBotao("FPS", "ESP por Metros: OFF", Color3.fromRGB(180, 50, 50), 4)
+local btnESPEquipes = criarBotao("FPS", "Filtrar: APENAS INIMIGOS (OFF)", Color3.fromRGB(180, 50, 50), 5)
+local btnCatAimbots = criarBotao("FPS", "Categoria: Aimbots >", Color3.fromRGB(120, 50, 180), 6)
+local btnVoltarFPS = criarBotao("FPS", "< Voltar", Color3.fromRGB(60, 60, 65), 7)
+
+criarPagina("Aimbots")
+local btnAimDescarado = criarBotao("Aimbots", "Modo: Descarado", Color3.fromRGB(200, 60, 60), 1)
+local btnAimDisfarcado = criarBotao("Aimbots", "Modo: Disfarçado", Color3.fromRGB(40, 140, 200), 2)
+local btnAimEspecifico = criarBotao("Aimbots", "Aimbot Específico: OFF", Color3.fromRGB(180, 50, 50), 3)
+local btnVisibilidadeMira = criarBotao("Aimbots", "Botões Tela: OCULTOS", Color3.fromRGB(180, 50, 50), 4)
+local btnVisibilidadeMelhorado = criarBotao("Aimbots", "Botão Suave (Roxo): OCULTO", Color3.fromRGB(180, 50, 50), 5)
+local btnVoltarAimbots = criarBotao("Aimbots", "< Voltar", Color3.fromRGB(60, 60, 65), 6)
+
+criarPagina("Utilidades")
+local btnLocalizador = criarBotao("Utilidades", "📍 Localizador", Color3.fromRGB(0, 180, 120), 1)
+local btnNoclip = criarBotao("Utilidades", "Noclip Geral: OFF", Color3.fromRGB(180, 50, 50), 2)
+local btnTPTool = criarBotao("Utilidades", "Pegar TP Tool", Color3.fromRGB(140, 60, 220), 3)
+local btnPartTool = criarBotao("Utilidades", "Pegar Part Tool", Color3.fromRGB(160, 110, 30), 4)
+local btnView = criarBotao("Utilidades", "Ver Jogadores (View): OFF", Color3.fromRGB(180, 50, 50), 5)
+local btnFreecam = criarBotao("Utilidades", "Freecam (Câmera Livre): OFF", Color3.fromRGB(180, 50, 50), 6)
+local btnCatTeleportes = criarBotao("Utilidades", "🌀 Teleportes >", Color3.fromRGB(0, 150, 220), 7)
+local btnCatPartes = criarBotao("Utilidades", "🧩 Partes / Marcadores >", Color3.fromRGB(160, 110, 30), 8)
+local btnVoltarUtilidades = criarBotao("Utilidades", "< Voltar", Color3.fromRGB(60, 60, 65), 9)
+
+criarPagina("Teleporte")
+local btnTPParaParte = criarBotao("Teleporte", "🧩 Teleportar p/ Parte", Color3.fromRGB(40, 160, 120), 1)
+local btnTPParaJogador = criarBotao("Teleporte", "👤 Teleportar p/ Jogador", Color3.fromRGB(180, 80, 180), 2)
+local btnVoltarTeleporte = criarBotao("Teleporte", "< Voltar", Color3.fromRGB(60, 60, 65), 3)
+
+criarPagina("Partes")
+local btnCriarParte = criarBotao("Partes", "➕ Criar Parte", Color3.fromRGB(40, 160, 80), 1)
+local btnGerenciarPartes = criarBotao("Partes", "🗑️ Gerenciar Partes", Color3.fromRGB(200, 80, 40), 2)
+local btnTPPartes = criarBotao("Partes", "🌀 Teleportar p/ Partes", Color3.fromRGB(40, 120, 200), 3)
+local btnVoltarPartes = criarBotao("Partes", "< Voltar", Color3.fromRGB(60, 60, 65), 4)
+
+criarPagina("Dex")
+local btnAbrirExplorer = criarBotao("Dex", "🔍 Abrir Explorer", Color3.fromRGB(30, 130, 200), 1)
+local btnAbrirPropriedades = criarBotao("Dex", "📋 Abrir Propriedades", Color3.fromRGB(140, 80, 200), 2)
+local btnClickSelect = criarBotao("Dex", "🎯 Clicar p/ Selecionar: OFF", Color3.fromRGB(180, 50, 50), 3)
+local btnVoltarDex = criarBotao("Dex", "< Voltar", Color3.fromRGB(60, 60, 65), 4)
+
+mostrarPagina("Main")
+
+btnCatJogos.MouseButton1Click:Connect(function() mostrarPagina("Jogos") end)
+btnCatEB.MouseButton1Click:Connect(function() mostrarPagina("EB") end)
+btnCatFPS.MouseButton1Click:Connect(function() mostrarPagina("FPS") end)
+btnCatAimbots.MouseButton1Click:Connect(function() mostrarPagina("Aimbots") end)
+btnCatUtilidades.MouseButton1Click:Connect(function() mostrarPagina("Utilidades") end)
+btnCatTeleportes.MouseButton1Click:Connect(function() mostrarPagina("Teleporte") end)
+btnCatPartes.MouseButton1Click:Connect(function() mostrarPagina("Partes") end)
+btnCatDex.MouseButton1Click:Connect(function() mostrarPagina("Dex") end)
+
+btnVoltarJogos.MouseButton1Click:Connect(function() mostrarPagina("Main") end)
+btnVoltarEB.MouseButton1Click:Connect(function() mostrarPagina("Jogos") end)
+btnVoltarFPS.MouseButton1Click:Connect(function() mostrarPagina("Main") end)
+btnVoltarAimbots.MouseButton1Click:Connect(function() mostrarPagina("FPS") end)
+btnVoltarUtilidades.MouseButton1Click:Connect(function() mostrarPagina("Main") end)
+btnVoltarTeleporte.MouseButton1Click:Connect(function() mostrarPagina("Utilidades") end)
+btnVoltarPartes.MouseButton1Click:Connect(function() mostrarPagina("Utilidades") end)
+btnVoltarDex.MouseButton1Click:Connect(function() mostrarPagina("Main") end)
+
+-- Gerenciamento de Visibilidade dos Botões de Mira
+local botoesMiraVisiveis = false
+local botoesMelhoradoVisiveis = false
+
+btnVisibilidadeMira.MouseButton1Click:Connect(function()
+    botoesMiraVisiveis = not botoesMiraVisiveis
+    if botoesMiraVisiveis then
+        botoesMelhoradoVisiveis = false
+        btnVisibilidadeMelhorado.Text = "Botão Suave (Roxo): OCULTO"
+        btnVisibilidadeMelhorado.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        
+        btnVisibilidadeMira.Text = "Botões Tela: VISÍVEIS"
+        btnVisibilidadeMira.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        
+        btnAim.Visible = true
+        btnAimUpdate.Visible = true
+        btnAimMelhorado.Visible = false
+    else
+        btnVisibilidadeMira.Text = "Botões Tela: OCULTOS"
+        btnVisibilidadeMira.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        btnAim.Visible = false
+        btnAimUpdate.Visible = false
+        btnAimMelhorado.Visible = false
+    end
+end)
+
+btnVisibilidadeMelhorado.MouseButton1Click:Connect(function()
+    botoesMelhoradoVisiveis = not botoesMelhoradoVisiveis
+    if botoesMelhoradoVisiveis then
+        botoesMiraVisiveis = false
+        btnVisibilidadeMira.Text = "Botões Tela: OCULTOS"
+        btnVisibilidadeMira.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+
+        btnVisibilidadeMelhorado.Text = "Botão Suave (Roxo): VISÍVEL"
+        btnVisibilidadeMelhorado.BackgroundColor3 = Color3.fromRGB(140, 50, 200)
+
+        btnAim.Visible = true
+        btnAimUpdate.Visible = false
+        btnAimMelhorado.Visible = true
+    else
+        btnVisibilidadeMelhorado.Text = "Botão Suave (Roxo): OCULTO"
+        btnVisibilidadeMelhorado.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        btnAim.Visible = false
+        btnAimUpdate.Visible = false
+        btnAimMelhorado.Visible = false
+    end
+end)
+
+-- ============================================================================
+-- 2.1 SISTEMA DE ESP POR PARTE / ITEM
+-- ============================================================================
+
+local espParteFrame = Instance.new("Frame")
+espParteFrame.Name = "ESPParteFrame"
+espParteFrame.Size = UDim2.new(0, 240, 0, 160)
+espParteFrame.Position = UDim2.new(0.5, 125, 0.4, -80)
+espParteFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+espParteFrame.BorderSizePixel = 0
+espParteFrame.Active = true
+espParteFrame.Draggable = true
+espParteFrame.Visible = false
+espParteFrame.Parent = screenGui
+
+local espPCorner = Instance.new("UICorner")
+espPCorner.CornerRadius = UDim.new(0, 8)
+espPCorner.Parent = espParteFrame
+
+local espPTitle = Instance.new("TextLabel")
+espPTitle.Size = UDim2.new(1, -30, 0, 25)
+espPTitle.Position = UDim2.new(0, 10, 0, 2)
+espPTitle.BackgroundTransparency = 1
+espPTitle.Text = "🔍 ESP por Parte / Palavra-Chave"
+espPTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+espPTitle.TextSize = 12
+espPTitle.Font = Enum.Font.SourceSansBold
+espPTitle.TextXAlignment = Enum.TextXAlignment.Left
+espPTitle.Parent = espParteFrame
+
+local espPCloseBtn = Instance.new("TextButton")
+espPCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+espPCloseBtn.Position = UDim2.new(1, -24, 0, 4)
+espPCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+espPCloseBtn.Text = "X"
+espPCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+espPCloseBtn.TextSize = 12
+espPCloseBtn.Font = Enum.Font.SourceSansBold
+espPCloseBtn.Parent = espParteFrame
+
+local espPCloseCorner = Instance.new("UICorner")
+espPCloseCorner.CornerRadius = UDim.new(0, 4)
+espPCloseCorner.Parent = espPCloseBtn
+
+espPCloseBtn.MouseButton1Click:Connect(function()
+    espParteFrame.Visible = false
+end)
+
+local espPInput = Instance.new("TextBox")
+espPInput.Size = UDim2.new(0.9, 0, 0, 28)
+espPInput.Position = UDim2.new(0.05, 0, 0.22, 0)
+espPInput.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+espPInput.PlaceholderText = "Ex: ouro, Barra, Maleta..."
+espPInput.Text = ""
+espPInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+espPInput.TextSize = 11
+espPInput.Font = Enum.Font.SourceSans
+espPInput.Parent = espParteFrame
+
+local espPInputCorner = Instance.new("UICorner")
+espPInputCorner.CornerRadius = UDim.new(0, 4)
+espPInputCorner.Parent = espPInput
+
+local espPExecBtn = Instance.new("TextButton")
+espPExecBtn.Size = UDim2.new(0.43, 0, 0, 28)
+espPExecBtn.Position = UDim2.new(0.05, 0, 0.48, 0)
+espPExecBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 120)
+espPExecBtn.Text = "Ativar ESP"
+espPExecBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+espPExecBtn.TextSize = 11
+espPExecBtn.Font = Enum.Font.SourceSansBold
+espPExecBtn.Parent = espParteFrame
+
+local espPExecCorner = Instance.new("UICorner")
+espPExecCorner.CornerRadius = UDim.new(0, 4)
+espPExecCorner.Parent = espPExecBtn
+
+local espPLimparBtn = Instance.new("TextButton")
+espPLimparBtn.Size = UDim2.new(0.43, 0, 0, 28)
+espPLimparBtn.Position = UDim2.new(0.52, 0, 0.48, 0)
+espPLimparBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+espPLimparBtn.Text = "Limpar ESP"
+espPLimparBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+espPLimparBtn.TextSize = 11
+espPLimparBtn.Font = Enum.Font.SourceSansBold
+espPLimparBtn.Parent = espParteFrame
+
+local espPLimparCorner = Instance.new("UICorner")
+espPLimparCorner.CornerRadius = UDim.new(0, 4)
+espPLimparCorner.Parent = espPLimparBtn
+
+local espPStatus = Instance.new("TextLabel")
+espPStatus.Size = UDim2.new(0.9, 0, 0, 30)
+espPStatus.Position = UDim2.new(0.05, 0, 0.72, 0)
+espPStatus.BackgroundTransparency = 1
+espPStatus.Text = "Status: Nenhum ESP de parte ativo"
+espPStatus.TextColor3 = Color3.fromRGB(0, 255, 200)
+espPStatus.TextSize = 10
+espPStatus.Font = Enum.Font.SourceSans
+espPStatus.TextWrapped = true
+espPStatus.Parent = espParteFrame
+
+local partesEspObjetos = {}
+
+local function limparESPPartes()
+    for _, item in ipairs(partesEspObjetos) do
+        if item.Highlight then item.Highlight:Destroy() end
+        if item.Billboard then item.Billboard:Destroy() end
+    end
+    partesEspObjetos = {}
+    espPStatus.Text = "Status: ESPs limpos com sucesso!"
+    espPStatus.TextColor3 = Color3.fromRGB(255, 200, 0)
+end
+
+local function buscarEAtivarESPPartes(palavraChave)
+    limparESPPartes()
+
+    if palavraChave == "" then
+        espPStatus.Text = "Digite uma palavra-chave válida!"
+        espPStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        return
+    end
+
+    local termo = string.lower(palavraChave)
+    local encontrados = 0
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if (obj:IsA("BasePart") or obj:IsA("Model")) and string.find(string.lower(obj.Name), termo) then
+            encontrados = encontrados + 1
+
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "ESP_Parte_Highlight"
+            highlight.Adornee = obj
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.FillColor = Color3.fromRGB(255, 170, 0)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.OutlineTransparency = 0
+            highlight.Parent = obj
+
+            local bb = Instance.new("BillboardGui")
+            bb.Name = "ESP_Parte_Billboard"
+            bb.Adornee = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart"))
+            bb.Size = UDim2.new(0, 120, 0, 25)
+            bb.StudsOffset = Vector3.new(0, 2, 0)
+            bb.AlwaysOnTop = true
+
+            local txt = Instance.new("TextLabel")
+            txt.Size = UDim2.new(1, 0, 1, 0)
+            txt.BackgroundTransparency = 1
+            txt.Text = "📦 " .. obj.Name
+            txt.TextColor3 = Color3.fromRGB(255, 215, 0)
+            txt.TextStrokeTransparency = 0.2
+            txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            txt.TextSize = 11
+            txt.Font = Enum.Font.SourceSansBold
+            txt.Parent = bb
+
+            if bb.Adornee then
+                bb.Parent = bb.Adornee
+            end
+
+            table.insert(partesEspObjetos, {
+                Highlight = highlight,
+                Billboard = bb
+            })
+        end
+    end
+
+    if encontrados > 0 then
+        espPStatus.Text = string.format("Ativo! Encontrados %d objetos para '%s'", encontrados, palavraChave)
+        espPStatus.TextColor3 = Color3.fromRGB(0, 255, 120)
+    else
+        espPStatus.Text = "Nenhum objeto encontrado com esse nome!"
+        espPStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end
+
+espPExecBtn.MouseButton1Click:Connect(function()
+    buscarEAtivarESPPartes(espPInput.Text)
+end)
+
+espPLimparBtn.MouseButton1Click:Connect(limparESPPartes)
+
+espPInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        buscarEAtivarESPPartes(espPInput.Text)
+    end
+end)
+
+btnESPParte.MouseButton1Click:Connect(function()
+    espParteFrame.Visible = not espParteFrame.Visible
+end)
+
+-- ============================================================================
+-- 2.2 LOCALIZADOR
+-- ============================================================================
+
+local localizadorFrame = Instance.new("Frame")
+localizadorFrame.Name = "LocalizadorFrame"
+localizadorFrame.Size = UDim2.new(0, 260, 0, 150)
+localizadorFrame.Position = UDim2.new(0.5, 125, 0.4, -75)
+localizadorFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+localizadorFrame.BorderSizePixel = 0
+localizadorFrame.Active = true
+localizadorFrame.Draggable = true
+localizadorFrame.Visible = false
+localizadorFrame.Parent = screenGui
+
+local locCorner = Instance.new("UICorner")
+locCorner.CornerRadius = UDim.new(0, 8)
+locCorner.Parent = localizadorFrame
+
+local locTitle = Instance.new("TextLabel")
+locTitle.Size = UDim2.new(1, -30, 0, 25)
+locTitle.Position = UDim2.new(0, 10, 0, 2)
+locTitle.BackgroundTransparency = 1
+locTitle.Text = "📍 Localizador de Posição"
+locTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+locTitle.TextSize = 12
+locTitle.Font = Enum.Font.SourceSansBold
+locTitle.TextXAlignment = Enum.TextXAlignment.Left
+locTitle.Parent = localizadorFrame
+
+local locCloseBtn = Instance.new("TextButton")
+locCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+locCloseBtn.Position = UDim2.new(1, -24, 0, 4)
+locCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+locCloseBtn.Text = "X"
+locCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+locCloseBtn.TextSize = 12
+locCloseBtn.Font = Enum.Font.SourceSansBold
+locCloseBtn.Parent = localizadorFrame
+
+local locCloseCorner = Instance.new("UICorner")
+locCloseCorner.CornerRadius = UDim.new(0, 4)
+locCloseCorner.Parent = locCloseBtn
+
+locCloseBtn.MouseButton1Click:Connect(function()
+    localizadorFrame.Visible = false
+end)
+
+local locBox = Instance.new("TextBox")
+locBox.Size = UDim2.new(0.9, 0, 0, 50)
+locBox.Position = UDim2.new(0.05, 0, 0.22, 0)
+locBox.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+locBox.Text = "Clique em 'Capturar Posição'"
+locBox.TextColor3 = Color3.fromRGB(0, 255, 200)
+locBox.TextSize = 11
+locBox.Font = Enum.Font.SourceSans
+locBox.TextWrapped = true
+locBox.ClearTextOnFocus = false
+locBox.Parent = localizadorFrame
+
+local locBoxCorner = Instance.new("UICorner")
+locBoxCorner.CornerRadius = UDim.new(0, 4)
+locBoxCorner.Parent = locBox
+
+local locCapBtn = Instance.new("TextButton")
+locCapBtn.Size = UDim2.new(0.9, 0, 0, 30)
+locCapBtn.Position = UDim2.new(0.05, 0, 0.65, 0)
+locCapBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 120)
+locCapBtn.Text = "🎯 Capturar Posição Atual"
+locCapBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+locCapBtn.TextSize = 12
+locCapBtn.Font = Enum.Font.SourceSansBold
+locCapBtn.Parent = localizadorFrame
+
+local locCapCorner = Instance.new("UICorner")
+locCapCorner.CornerRadius = UDim.new(0, 4)
+locCapCorner.Parent = locCapBtn
+
+local function obterEExibirPosicao()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local pos = hrp.Position
+        local posTexto = string.format("Vector3.new(%.2f, %.2f, %.2f)", pos.X, pos.Y, pos.Z)
+        locBox.Text = posTexto
+        if setclipboard then
+            pcall(function() setclipboard(posTexto) end)
+        end
+    else
+        locBox.Text = "Personagem não encontrado!"
+    end
+end
+
+locCapBtn.MouseButton1Click:Connect(obterEExibirPosicao)
+
+btnLocalizador.MouseButton1Click:Connect(function()
+    localizadorFrame.Visible = not localizadorFrame.Visible
+    if localizadorFrame.Visible then
+        obterEExibirPosicao()
+    end
+end)
+
+-- ============================================================================
+-- 3. HELPER DE DETECÇÃO DE INIMIGOS E TIMES
+-- ============================================================================
+
+local espEquipesAtivo = false
+
+local function ehInimigo(player)
+    if player == LocalPlayer then return false end
+    
+    if not espEquipesAtivo then return true end
+
+    if LocalPlayer.Team ~= nil and player.Team ~= nil then
+        return LocalPlayer.Team ~= player.Team
+    end
+
+    if LocalPlayer.TeamColor ~= player.TeamColor then
+        return true
+    end
+
+    return true
+end
+
+btnESPEquipes.MouseButton1Click:Connect(function()
+    espEquipesAtivo = not espEquipesAtivo
+    if espEquipesAtivo then
+        btnESPEquipes.Text = "Filtrar: APENAS INIMIGOS (ON)"
+        btnESPEquipes.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+    else
+        btnESPEquipes.Text = "Filtrar: APENAS INIMIGOS (OFF)"
+        btnESPEquipes.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+-- ============================================================================
+-- 4. SISTEMA DEX EXPLORER
+-- ============================================================================
+
+local dexObjetoSelecionado = workspace
+local dexClickSelectAtivo = false
+local objetoPaiAtual = game
+
+local atualizarExplorer = function() end
+local atualizarPropriedades = function() end
+
+local dexFrame = Instance.new("Frame")
+dexFrame.Name = "DexExplorerFrame"
+dexFrame.Size = UDim2.new(0, 240, 0, 320)
+dexFrame.Position = UDim2.new(0.02, 0, 0.15, 0)
+dexFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+dexFrame.BorderSizePixel = 0
+dexFrame.Active = true
+dexFrame.Draggable = true
+dexFrame.Visible = false
+dexFrame.Parent = screenGui
+
+local dexCorner = Instance.new("UICorner")
+dexCorner.CornerRadius = UDim.new(0, 8)
+dexCorner.Parent = dexFrame
+
+local dexTitle = Instance.new("TextLabel")
+dexTitle.Size = UDim2.new(1, -30, 0, 25)
+dexTitle.Position = UDim2.new(0, 10, 0, 2)
+dexTitle.BackgroundTransparency = 1
+dexTitle.Text = "🔍 Explorer"
+dexTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+dexTitle.TextSize = 13
+dexTitle.Font = Enum.Font.SourceSansBold
+dexTitle.TextXAlignment = Enum.TextXAlignment.Left
+dexTitle.Parent = dexFrame
+
+local dexCloseBtn = Instance.new("TextButton")
+dexCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+dexCloseBtn.Position = UDim2.new(1, -24, 0, 4)
+dexCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+dexCloseBtn.Text = "X"
+dexCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+dexCloseBtn.TextSize = 12
+dexCloseBtn.Font = Enum.Font.SourceSansBold
+dexCloseBtn.Parent = dexFrame
+
+local dexCloseCorner = Instance.new("UICorner")
+dexCloseCorner.CornerRadius = UDim.new(0, 4)
+dexCloseCorner.Parent = dexCloseBtn
+
+dexCloseBtn.MouseButton1Click:Connect(function()
+    dexFrame.Visible = false
+end)
+
+local dexSearchBox = Instance.new("TextBox")
+dexSearchBox.Size = UDim2.new(0.92, 0, 0, 22)
+dexSearchBox.Position = UDim2.new(0.04, 0, 0.09, 0)
+dexSearchBox.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+dexSearchBox.PlaceholderText = "Pesquisar em tudo..."
+dexSearchBox.Text = ""
+dexSearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+dexSearchBox.TextSize = 11
+dexSearchBox.Font = Enum.Font.SourceSans
+dexSearchBox.Parent = dexFrame
+
+local dexSearchCorner = Instance.new("UICorner")
+dexSearchCorner.CornerRadius = UDim.new(0, 4)
+dexSearchCorner.Parent = dexSearchBox
+
+local dexScroll = Instance.new("ScrollingFrame")
+dexScroll.Size = UDim2.new(0.92, 0, 0.82, 0)
+dexScroll.Position = UDim2.new(0.04, 0, 0.17, 0)
+dexScroll.BackgroundTransparency = 1
+dexScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+dexScroll.ScrollBarThickness = 4
+dexScroll.Parent = dexFrame
+
+local dexLayout = Instance.new("UIListLayout")
+dexLayout.Padding = UDim.new(0, 2)
+dexLayout.Parent = dexScroll
+
+local propFrame = Instance.new("Frame")
+propFrame.Name = "DexPropertiesFrame"
+propFrame.Size = UDim2.new(0, 240, 0, 300)
+propFrame.Position = UDim2.new(0.02, 0, 0.55, 0)
+propFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+propFrame.BorderSizePixel = 0
+propFrame.Active = true
+propFrame.Draggable = true
+propFrame.Visible = false
+propFrame.Parent = screenGui
+
+local propCorner = Instance.new("UICorner")
+propCorner.CornerRadius = UDim.new(0, 8)
+propCorner.Parent = propFrame
+
+local propTitle = Instance.new("TextLabel")
+propTitle.Size = UDim2.new(1, -30, 0, 25)
+propTitle.Position = UDim2.new(0, 10, 0, 2)
+propTitle.BackgroundTransparency = 1
+propTitle.Text = "📋 Propriedades"
+propTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+propTitle.TextSize = 13
+propTitle.Font = Enum.Font.SourceSansBold
+propTitle.TextXAlignment = Enum.TextXAlignment.Left
+propTitle.Parent = propFrame
+
+local propCloseBtn = Instance.new("TextButton")
+propCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+propCloseBtn.Position = UDim2.new(1, -24, 0, 4)
+propCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+propCloseBtn.Text = "X"
+propCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+propCloseBtn.TextSize = 12
+propCloseBtn.Font = Enum.Font.SourceSansBold
+propCloseBtn.Parent = propFrame
+
+local propCloseCorner = Instance.new("UICorner")
+propCloseCorner.CornerRadius = UDim.new(0, 4)
+propCloseCorner.Parent = propCloseBtn
+
+propCloseBtn.MouseButton1Click:Connect(function()
+    propFrame.Visible = false
+end)
+
+local propScroll = Instance.new("ScrollingFrame")
+propScroll.Size = UDim2.new(0.92, 0, 0.86, 0)
+propScroll.Position = UDim2.new(0.04, 0, 0.10, 0)
+propScroll.BackgroundTransparency = 1
+propScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+propScroll.ScrollBarThickness = 4
+propScroll.Parent = propFrame
+
+local propLayout = Instance.new("UIListLayout")
+propLayout.Padding = UDim.new(0, 3)
+propLayout.Parent = propScroll
+
+local listaPropriedades = {
+    "ActionText", "ObjectText", "HoldDuration", "MaxActivationDistance", 
+    "MaxIndicatorDistance", "Enabled", "ClickablePrompt", "Exclusivity", 
+    "KeyboardKeyCode", "GamepadKeyCode",
+    "Name", "ClassName", "Parent",
+    "Transparency", "Reflectance", "CanCollide", "Anchored", "CastShadow", "Position", "Size",
+    "WalkSpeed", "JumpPower", "Health", "MaxHealth",
+    "Brightness", "Range", "Volume", "PlaybackSpeed", "Playing", "Value"
+}
+
+atualizarPropriedades = function()
+    for _, child in ipairs(propScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    if not dexObjetoSelecionado then return end
+
+    local propsExibidas = 0
+
+    for _, propName in ipairs(listaPropriedades) do
+        local ok, val = pcall(function() return dexObjetoSelecionado[propName] end)
+        if ok and val ~= nil then
+            propsExibidas = propsExibidas + 1
+
+            local pItem = Instance.new("Frame")
+            pItem.Size = UDim2.new(1, 0, 0, 24)
+            pItem.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+            pItem.BorderSizePixel = 0
+            pItem.Parent = propScroll
+
+            local itemCorner = Instance.new("UICorner")
+            itemCorner.CornerRadius = UDim.new(0, 4)
+            itemCorner.Parent = pItem
+
+            local pNameLabel = Instance.new("TextLabel")
+            pNameLabel.Size = UDim2.new(0.48, 0, 1, 0)
+            pNameLabel.Position = UDim2.new(0.02, 0, 0, 0)
+            pNameLabel.BackgroundTransparency = 1
+            pNameLabel.Text = propName
+            pNameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+            pNameLabel.TextSize = 10
+            pNameLabel.Font = Enum.Font.SourceSansBold
+            pNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            pNameLabel.Parent = pItem
+
+            if propName == "ClassName" or propName == "Parent" then
+                local pVal = Instance.new("TextLabel")
+                pVal.Size = UDim2.new(0.48, 0, 1, 0)
+                pVal.Position = UDim2.new(0.50, 0, 0, 0)
+                pVal.BackgroundTransparency = 1
+                pVal.Text = (propName == "Parent") and (dexObjetoSelecionado.Parent and dexObjetoSelecionado.Parent.Name or "nil") or tostring(val)
+                pVal.TextColor3 = Color3.fromRGB(0, 255, 180)
+                pVal.TextSize = 10
+                pVal.Font = Enum.Font.SourceSans
+                pVal.TextXAlignment = Enum.TextXAlignment.Left
+                pVal.Parent = pItem
+
+            elseif type(val) == "boolean" then
+                local btnBool = Instance.new("TextButton")
+                btnBool.Size = UDim2.new(0.20, 0, 0.75, 0)
+                btnBool.Position = UDim2.new(0.50, 0, 0.12, 0)
+                btnBool.BackgroundColor3 = val and Color3.fromRGB(0, 150, 80) or Color3.fromRGB(80, 80, 85)
+                btnBool.Text = val and "✓" or " "
+                btnBool.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btnBool.TextSize = 11
+                btnBool.Font = Enum.Font.SourceSansBold
+                btnBool.Parent = pItem
+
+                local bCorner = Instance.new("UICorner")
+                bCorner.CornerRadius = UDim.new(0, 3)
+                bCorner.Parent = btnBool
+
+                btnBool.MouseButton1Click:Connect(function()
+                    local novoVal = not dexObjetoSelecionado[propName]
+                    pcall(function() dexObjetoSelecionado[propName] = novoVal end)
+                    atualizarPropriedades()
+                end)
+
+            elseif type(val) == "string" or type(val) == "number" or typeof(val) == "EnumItem" then
+                local pInput = Instance.new("TextBox")
+                pInput.Size = UDim2.new(0.48, 0, 0.8, 0)
+                pInput.Position = UDim2.new(0.50, 0, 0.1, 0)
+                pInput.BackgroundColor3 = Color3.fromRGB(42, 42, 50)
+                pInput.Text = tostring(val)
+                pInput.TextColor3 = Color3.fromRGB(0, 255, 200)
+                pInput.TextSize = 10
+                pInput.Font = Enum.Font.SourceSans
+                pInput.TextXAlignment = Enum.TextXAlignment.Left
+                pInput.ClearTextOnFocus = false
+                pInput.Parent = pItem
+
+                local inputCorner = Instance.new("UICorner")
+                inputCorner.CornerRadius = UDim.new(0, 3)
+                inputCorner.Parent = pInput
+
+                pInput.FocusLost:Connect(function()
+                    local text = pInput.Text
+                    if type(val) == "number" then
+                        local num = tonumber(text)
+                        if num then
+                            pcall(function() dexObjetoSelecionado[propName] = num end)
+                        end
+                    elseif type(val) == "string" then
+                        pcall(function() dexObjetoSelecionado[propName] = text end)
+                    end
+
+                    if propName == "Name" then
+                        atualizarExplorer(objetoPaiAtual, dexSearchBox.Text)
+                    end
+                    atualizarPropriedades()
+                end)
+
+            else
+                local pVal = Instance.new("TextLabel")
+                pVal.Size = UDim2.new(0.48, 0, 1, 0)
+                pVal.Position = UDim2.new(0.50, 0, 0, 0)
+                pVal.BackgroundTransparency = 1
+                pVal.Text = tostring(val)
+                pVal.TextColor3 = Color3.fromRGB(180, 180, 180)
+                pVal.TextSize = 10
+                pVal.Font = Enum.Font.SourceSans
+                pVal.TextXAlignment = Enum.TextXAlignment.Left
+                pVal.Parent = pItem
+            end
+        end
+    end
+
+    propScroll.CanvasSize = UDim2.new(0, 0, 0, propsExibidas * 27)
+end
+
+atualizarExplorer = function(parentObj, filtro)
+    for _, child in ipairs(dexScroll:GetChildren()) do
+        if child:IsA("Frame") or child:IsA("TextButton") then child:Destroy() end
+    end
+
+    parentObj = parentObj or objetoPaiAtual
+    objetoPaiAtual = parentObj
+
+    local totalItems = 0
+
+    if filtro and filtro ~= "" then
+        local termoBusca = string.lower(filtro)
+        local encontrados = {}
+        local contagemMax = 100
+
+        local todosDescendentes = parentObj:GetDescendants()
+        for _, obj in ipairs(todosDescendentes) do
+            if string.find(string.lower(obj.Name), termoBusca) then
+                table.insert(encontrados, obj)
+                if #encontrados >= contagemMax then break end
+            end
+        end
+
+        for _, obj in ipairs(encontrados) do
+            totalItems = totalItems + 1
+
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -8, 0, 22)
+            row.BackgroundColor3 = (obj == dexObjetoSelecionado) and Color3.fromRGB(0, 100, 180) or Color3.fromRGB(35, 40, 48)
+            row.BorderSizePixel = 0
+            row.Parent = dexScroll
+
+            local rCorner = Instance.new("UICorner")
+            rCorner.CornerRadius = UDim.new(0, 4)
+            rCorner.Parent = row
+
+            local btnSelect = Instance.new("TextButton")
+            btnSelect.Size = UDim2.new(0.75, 0, 1, 0)
+            btnSelect.BackgroundTransparency = 1
+            btnSelect.Text = " " .. obj.Name .. " (" .. obj.ClassName .. ")"
+            btnSelect.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btnSelect.TextSize = 10
+            btnSelect.Font = Enum.Font.SourceSans
+            btnSelect.TextXAlignment = Enum.TextXAlignment.Left
+            btnSelect.Parent = row
+
+            btnSelect.MouseButton1Click:Connect(function()
+                dexObjetoSelecionado = obj
+                atualizarExplorer(objetoPaiAtual, dexSearchBox.Text)
+                if propFrame.Visible then atualizarPropriedades() end
+            end)
+
+            if #obj:GetChildren() > 0 then
+                local btnEntrar = Instance.new("TextButton")
+                btnEntrar.Size = UDim2.new(0.2, 0, 0.8, 0)
+                btnEntrar.Position = UDim2.new(0.78, 0, 0.1, 0)
+                btnEntrar.BackgroundColor3 = Color3.fromRGB(60, 65, 75)
+                btnEntrar.Text = ">"
+                btnEntrar.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btnEntrar.TextSize = 10
+                btnEntrar.Font = Enum.Font.SourceSansBold
+                btnEntrar.Parent = row
+
+                local eCorner = Instance.new("UICorner")
+                eCorner.CornerRadius = UDim.new(0, 3)
+                eCorner.Parent = btnEntrar
+
+                btnEntrar.MouseButton1Click:Connect(function()
+                    dexSearchBox.Text = ""
+                    atualizarExplorer(obj, "")
+                end)
+            end
+        end
+    else
+        if parentObj ~= game then
+            totalItems = totalItems + 1
+            local btnVoltar = Instance.new("TextButton")
+            btnVoltar.Size = UDim2.new(1, -8, 0, 22)
+            btnVoltar.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+            btnVoltar.Text = "⬆️ .. (" .. parentObj.Name .. ")"
+            btnVoltar.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btnVoltar.TextSize = 11
+            btnVoltar.Font = Enum.Font.SourceSansBold
+            btnVoltar.Parent = dexScroll
+
+            btnVoltar.MouseButton1Click:Connect(function()
+                atualizarExplorer(parentObj.Parent or game, "")
+            end)
+        end
+
+        local objetos = parentObj:GetChildren()
+        for _, obj in ipairs(objetos) do
+            totalItems = totalItems + 1
+
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -8, 0, 22)
+            row.BackgroundColor3 = (obj == dexObjetoSelecionado) and Color3.fromRGB(0, 100, 180) or Color3.fromRGB(35, 40, 48)
+            row.BorderSizePixel = 0
+            row.Parent = dexScroll
+
+            local rCorner = Instance.new("UICorner")
+            rCorner.CornerRadius = UDim.new(0, 4)
+            rCorner.Parent = row
+
+            local btnSelect = Instance.new("TextButton")
+            btnSelect.Size = UDim2.new(0.75, 0, 1, 0)
+            btnSelect.BackgroundTransparency = 1
+            btnSelect.Text = " " .. obj.Name
+            btnSelect.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btnSelect.TextSize = 11
+            btnSelect.Font = Enum.Font.SourceSans
+            btnSelect.TextXAlignment = Enum.TextXAlignment.Left
+            btnSelect.Parent = row
+
+            btnSelect.MouseButton1Click:Connect(function()
+                dexObjetoSelecionado = obj
+                atualizarExplorer(objetoPaiAtual, "")
+                if propFrame.Visible then atualizarPropriedades() end
+            end)
+
+            if #obj:GetChildren() > 0 then
+                local btnEntrar = Instance.new("TextButton")
+                btnEntrar.Size = UDim2.new(0.2, 0, 0.8, 0)
+                btnEntrar.Position = UDim2.new(0.78, 0, 0.1, 0)
+                btnEntrar.BackgroundColor3 = Color3.fromRGB(60, 65, 75)
+                btnEntrar.Text = ">"
+                btnEntrar.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btnEntrar.TextSize = 10
+                btnEntrar.Font = Enum.Font.SourceSansBold
+                btnEntrar.Parent = row
+
+                local eCorner = Instance.new("UICorner")
+                eCorner.CornerRadius = UDim.new(0, 3)
+                eCorner.Parent = btnEntrar
+
+                btnEntrar.MouseButton1Click:Connect(function()
+                    atualizarExplorer(obj, "")
+                end)
+            end
+        end
+    end
+
+    dexScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 25)
+end
+
+dexSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    atualizarExplorer(objetoPaiAtual, dexSearchBox.Text)
+end)
+
+btnAbrirExplorer.MouseButton1Click:Connect(function()
+    dexFrame.Visible = not dexFrame.Visible
+    if dexFrame.Visible then
+        atualizarExplorer(game, dexSearchBox.Text)
+    end
+end)
+
+btnAbrirPropriedades.MouseButton1Click:Connect(function()
+    propFrame.Visible = not propFrame.Visible
+    if propFrame.Visible then
+        atualizarPropriedades()
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if dexClickSelectAtivo and not gpe then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local target = Mouse.Target
+            if target then
+                dexObjetoSelecionado = target
+                if dexFrame.Visible then atualizarExplorer(target.Parent or game, "") end
+                if propFrame.Visible then atualizarPropriedades() end
+            end
+        end
+    end
+end)
+
+btnClickSelect.MouseButton1Click:Connect(function()
+    dexClickSelectAtivo = not dexClickSelectAtivo
+    if dexClickSelectAtivo then
+        btnClickSelect.Text = "🎯 Clicar p/ Selecionar: ON"
+        btnClickSelect.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+    else
+        btnClickSelect.Text = "🎯 Clicar p/ Selecionar: OFF"
+        btnClickSelect.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+-- ============================================================================
+-- 5. GERADOR DE PAINÉIS DE SELEÇÃO FLUTUANTES
+-- ============================================================================
+
+local function criarPainelSelecao(nomeFrame, tituloTexto, posXOffset)
+    local pFrame = Instance.new("Frame")
+    pFrame.Name = nomeFrame
+    pFrame.Size = UDim2.new(0, 200, 0, 240)
+    pFrame.Position = UDim2.new(0.5, posXOffset, 0.4, -120)
+    pFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    pFrame.BorderSizePixel = 0
+    pFrame.Active = true
+    pFrame.Draggable = true
+    pFrame.Visible = false
+    pFrame.Parent = screenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = pFrame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -10, 0, 25)
+    title.Position = UDim2.new(0, 5, 0, 2)
+    title.BackgroundTransparency = 1
+    title.Text = tituloTexto
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 12
+    title.Font = Enum.Font.SourceSansBold
+    title.Parent = pFrame
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(0.9, 0, 0.68, 0)
+    scroll.Position = UDim2.new(0.05, 0, 0.12, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.ScrollBarThickness = 4
+    scroll.Parent = pFrame
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 4)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.Parent = scroll
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+    statusLabel.Position = UDim2.new(0.05, 0, 0.82, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "Status: Nenhum"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+    statusLabel.TextSize = 11
+    statusLabel.Font = Enum.Font.SourceSansBold
+    statusLabel.Parent = pFrame
+
+    return pFrame, scroll, statusLabel
+end
+
+-- ============================================================================
+-- 6. SISTEMA DE TELEPORTES
+-- ============================================================================
+
+local tpNomeParteFrame = Instance.new("Frame")
+tpNomeParteFrame.Name = "TPNomeParteFrame"
+tpNomeParteFrame.Size = UDim2.new(0, 220, 0, 130)
+tpNomeParteFrame.Position = UDim2.new(0.5, 125, 0.4, -65)
+tpNomeParteFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+tpNomeParteFrame.BorderSizePixel = 0
+tpNomeParteFrame.Active = true
+tpNomeParteFrame.Draggable = true
+tpNomeParteFrame.Visible = false
+tpNomeParteFrame.Parent = screenGui
+
+local tpNPCorner = Instance.new("UICorner")
+tpNPCorner.CornerRadius = UDim.new(0, 8)
+tpNPCorner.Parent = tpNomeParteFrame
+
+local tpNPTitle = Instance.new("TextLabel")
+tpNPTitle.Size = UDim2.new(1, -30, 0, 25)
+tpNPTitle.Position = UDim2.new(0, 10, 0, 2)
+tpNPTitle.BackgroundTransparency = 1
+tpNPTitle.Text = "🧩 Teleportar p/ Parte"
+tpNPTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpNPTitle.TextSize = 12
+tpNPTitle.Font = Enum.Font.SourceSansBold
+tpNPTitle.TextXAlignment = Enum.TextXAlignment.Left
+tpNPTitle.Parent = tpNomeParteFrame
+
+local tpNPCloseBtn = Instance.new("TextButton")
+tpNPCloseBtn.Size = UDim2.new(0, 20, 0, 20)
+tpNPCloseBtn.Position = UDim2.new(1, -24, 0, 4)
+tpNPCloseBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+tpNPCloseBtn.Text = "X"
+tpNPCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpNPCloseBtn.TextSize = 12
+tpNPCloseBtn.Font = Enum.Font.SourceSansBold
+tpNPCloseBtn.Parent = tpNomeParteFrame
+
+local tpNPCloseCorner = Instance.new("UICorner")
+tpNPCloseCorner.CornerRadius = UDim.new(0, 4)
+tpNPCloseCorner.Parent = tpNPCloseBtn
+
+tpNPCloseBtn.MouseButton1Click:Connect(function()
+    tpNomeParteFrame.Visible = false
+end)
+
+local tpNPInput = Instance.new("TextBox")
+tpNPInput.Size = UDim2.new(0.9, 0, 0, 28)
+tpNPInput.Position = UDim2.new(0.05, 0, 0.28, 0)
+tpNPInput.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+tpNPInput.PlaceholderText = "Digite o nome da Parte..."
+tpNPInput.Text = ""
+tpNPInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpNPInput.TextSize = 11
+tpNPInput.Font = Enum.Font.SourceSans
+tpNPInput.Parent = tpNomeParteFrame
+
+local tpNPInputCorner = Instance.new("UICorner")
+tpNPInputCorner.CornerRadius = UDim.new(0, 4)
+tpNPInputCorner.Parent = tpNPInput
+
+local tpNPExecBtn = Instance.new("TextButton")
+tpNPExecBtn.Size = UDim2.new(0.9, 0, 0, 28)
+tpNPExecBtn.Position = UDim2.new(0.05, 0, 0.55, 0)
+tpNPExecBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 120)
+tpNPExecBtn.Text = "Teleportar"
+tpNPExecBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpNPExecBtn.TextSize = 12
+tpNPExecBtn.Font = Enum.Font.SourceSansBold
+tpNPExecBtn.Parent = tpNomeParteFrame
+
+local tpNPExecCorner = Instance.new("UICorner")
+tpNPExecCorner.CornerRadius = UDim.new(0, 4)
+tpNPExecCorner.Parent = tpNPExecBtn
+
+local tpNPStatus = Instance.new("TextLabel")
+tpNPStatus.Size = UDim2.new(0.9, 0, 0, 18)
+tpNPStatus.Position = UDim2.new(0.05, 0, 0.82, 0)
+tpNPStatus.BackgroundTransparency = 1
+tpNPStatus.Text = "Aguardando..."
+tpNPStatus.TextColor3 = Color3.fromRGB(0, 255, 200)
+tpNPStatus.TextSize = 10
+tpNPStatus.Font = Enum.Font.SourceSans
+tpNPStatus.Parent = tpNomeParteFrame
+
+local function realizarTPParaParte(nomeParte)
+    if nomeParte == "" then
+        tpNPStatus.Text = "Digite um nome válido!"
+        tpNPStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        return
+    end
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local parteEncontrada = workspace:FindFirstChild(nomeParte, true)
+
+    if parteEncontrada and parteEncontrada:IsA("BasePart") then
+        hrp.CFrame = parteEncontrada.CFrame + Vector3.new(0, 3, 0)
+        tpNPStatus.Text = "Teleportado para: " .. parteEncontrada.Name
+        tpNPStatus.TextColor3 = Color3.fromRGB(0, 255, 200)
+    else
+        tpNPStatus.Text = "Parte não encontrada!"
+        tpNPStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end
+
+tpNPExecBtn.MouseButton1Click:Connect(function()
+    realizarTPParaParte(tpNPInput.Text)
+end)
+
+tpNPInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        realizarTPParaParte(tpNPInput.Text)
+    end
+end)
+
+btnTPParaParte.MouseButton1Click:Connect(function()
+    tpNomeParteFrame.Visible = not tpNomeParteFrame.Visible
+end)
+
+local tpPlayerFrame, tpPlayerScroll, tpPlayerStatus = criarPainelSelecao("TPPlayerFrame", "👤 Teleportar p/ Jogador", 125)
+
+local function atualizarListaTPJogador()
+    for _, child in ipairs(tpPlayerScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            totalItems = totalItems + 1
+            local pBtn = Instance.new("TextButton")
+            pBtn.Size = UDim2.new(1, -8, 0, 26)
+            pBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+            pBtn.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+            pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            pBtn.TextSize = 11
+            pBtn.Font = Enum.Font.SourceSansBold
+            pBtn.Parent = tpPlayerScroll
+
+            local pCorner = Instance.new("UICorner")
+            pCorner.CornerRadius = UDim.new(0, 4)
+            pCorner.Parent = pBtn
+
+            pBtn.MouseButton1Click:Connect(function()
+                local targetChar = player.Character
+                local targetHrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                local myChar = LocalPlayer.Character
+                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+                if targetHrp and myHrp then
+                    myHrp.CFrame = targetHrp.CFrame + Vector3.new(0, 3, 0)
+                end
+
+                tpPlayerFrame.Visible = false
+            end)
+        end
+    end
+
+    tpPlayerScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+btnTPParaJogador.MouseButton1Click:Connect(function()
+    atualizarListaTPJogador()
+    tpPlayerFrame.Visible = not tpPlayerFrame.Visible
+end)
+
+-- ============================================================================
+-- 7. VIEW / SPECTATE JOGADORES
+-- ============================================================================
+
+local viewFrame, viewScroll, viewStatus = criarPainelSelecao("ViewFrame", "👁️ Selecione o Jogador", 125)
+local viewAtivo = false
+
+local function restaurarVisaoNormal()
+    Camera.CameraType = Enum.CameraType.Custom
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    end
+end
+
+local function atualizarListaView()
+    for _, child in ipairs(viewScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            totalItems = totalItems + 1
+            local pBtn = Instance.new("TextButton")
+            pBtn.Size = UDim2.new(1, -8, 0, 26)
+            pBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+            pBtn.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+            pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            pBtn.TextSize = 11
+            pBtn.Font = Enum.Font.SourceSansBold
+            pBtn.Parent = viewScroll
+
+            local pCorner = Instance.new("UICorner")
+            pCorner.CornerRadius = UDim.new(0, 4)
+            pCorner.Parent = pBtn
+
+            pBtn.MouseButton1Click:Connect(function()
+                if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+                    Camera.CameraType = Enum.CameraType.Custom
+                    Camera.CameraSubject = player.Character:FindFirstChildOfClass("Humanoid")
+                    viewStatus.Text = "Vendo: " .. player.DisplayName
+                end
+            end)
+        end
+    end
+
+    viewScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+btnView.MouseButton1Click:Connect(function()
+    viewAtivo = not viewAtivo
+    if viewAtivo then
+        btnView.Text = "Ver Jogadores (View): ON"
+        btnView.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaView()
+        viewFrame.Visible = true
+    else
+        btnView.Text = "Ver Jogadores (View): OFF"
+        btnView.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        viewFrame.Visible = false
+        viewStatus.Text = "Status: Nenhum"
+        restaurarVisaoNormal()
+    end
+end)
+
+-- ============================================================================
+-- 8. SP ESPECÍFICO E ESP POR METROS
+-- ============================================================================
+
+local spSpecFrame, spSpecScroll, spSpecStatus = criarPainelSelecao("SPSpecFrame", "📡 SP/ESP Específico", 125)
+local spEspecificoAtivo = false
+local targetSPEspecifico = nil
+
+local function atualizarListaSPEspecifico()
+    for _, child in ipairs(spSpecScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            totalItems = totalItems + 1
+            local pBtn = Instance.new("TextButton")
+            pBtn.Size = UDim2.new(1, -8, 0, 26)
+            pBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+            pBtn.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+            pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            pBtn.TextSize = 11
+            pBtn.Font = Enum.Font.SourceSansBold
+            pBtn.Parent = spSpecScroll
+
+            local pCorner = Instance.new("UICorner")
+            pCorner.CornerRadius = UDim.new(0, 4)
+            pCorner.Parent = pBtn
+
+            pBtn.MouseButton1Click:Connect(function()
+                targetSPEspecifico = player
+                spSpecStatus.Text = "SP em: " .. player.DisplayName
+                spSpecFrame.Visible = false
+            end)
+        end
+    end
+
+    spSpecScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+btnSPEspecifico.MouseButton1Click:Connect(function()
+    spEspecificoAtivo = not spEspecificoAtivo
+    if spEspecificoAtivo then
+        btnSPEspecifico.Text = "SP Específico: ON"
+        btnSPEspecifico.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaSPEspecifico()
+        spSpecFrame.Visible = true
+    else
+        btnSPEspecifico.Text = "SP Específico: OFF"
+        btnSPEspecifico.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        spSpecFrame.Visible = false
+        targetSPEspecifico = nil
+        spSpecStatus.Text = "Status: Nenhum"
+    end
+end)
+
+local espDistFrame, espDistScroll, espDistStatus = criarPainelSelecao("ESPDistFrame", "📏 ESP por Metros", 125)
+espDistStatus.Text = "Limite: 100m"
+
+local espDistanciaAtivo = false
+local maxMetrosESP = 100
+
+local function atualizarListaDistancia()
+    for _, child in ipairs(espDistScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for d = 100, 2000, 100 do
+        totalItems = totalItems + 1
+        local dBtn = Instance.new("TextButton")
+        dBtn.Size = UDim2.new(1, -8, 0, 26)
+        dBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+        dBtn.Text = d .. " Metros (" .. d .. "m)"
+        dBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        dBtn.TextSize = 11
+        dBtn.Font = Enum.Font.SourceSansBold
+        dBtn.Parent = espDistScroll
+
+        local dCorner = Instance.new("UICorner")
+        dCorner.CornerRadius = UDim.new(0, 4)
+        dCorner.Parent = dBtn
+
+        dBtn.MouseButton1Click:Connect(function()
+            maxMetrosESP = d
+            espDistStatus.Text = "Limite: " .. d .. "m"
+        end)
+    end
+
+    espDistScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+btnESPDistancia.MouseButton1Click:Connect(function()
+    espDistanciaAtivo = not espDistanciaAtivo
+    if espDistanciaAtivo then
+        btnESPDistancia.Text = "ESP por Metros: ON"
+        btnESPDistancia.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaDistancia()
+        espDistFrame.Visible = true
+    else
+        btnESPDistancia.Text = "ESP por Metros: OFF"
+        btnESPDistancia.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        espDistFrame.Visible = false
+    end
+end)
+
+-- ============================================================================
+-- 9. AIMBOT ESPECÍFICO
+-- ============================================================================
+
+local aimSpecFrame, aimSpecScroll, aimSpecStatus = criarPainelSelecao("AimSpecFrame", "🎯 Aimbot Específico", 125)
+local aimEspecificoAtivo = false
+local targetAimEspecifico = nil
+
+local function atualizarListaAimEspecifico()
+    for _, child in ipairs(aimSpecScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            totalItems = totalItems + 1
+            local pBtn = Instance.new("TextButton")
+            pBtn.Size = UDim2.new(1, -8, 0, 26)
+            pBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+            pBtn.Text = player.DisplayName .. " (@" .. player.Name .. ")"
+            pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            pBtn.TextSize = 11
+            pBtn.Font = Enum.Font.SourceSansBold
+            pBtn.Parent = aimSpecScroll
+
+            local pCorner = Instance.new("UICorner")
+            pCorner.CornerRadius = UDim.new(0, 4)
+            pCorner.Parent = pBtn
+
+            pBtn.MouseButton1Click:Connect(function()
+                targetAimEspecifico = player
+                aimSpecStatus.Text = "Mira em: " .. player.DisplayName
+                aimSpecFrame.Visible = false
+            end)
+        end
+    end
+
+    aimSpecScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+btnAimEspecifico.MouseButton1Click:Connect(function()
+    aimEspecificoAtivo = not aimEspecificoAtivo
+    if aimEspecificoAtivo then
+        btnAimEspecifico.Text = "Aimbot Específico: ON"
+        btnAimEspecifico.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaAimEspecifico()
+        aimSpecFrame.Visible = true
+    else
+        btnAimEspecifico.Text = "Aimbot Específico: OFF"
+        btnAimEspecifico.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        aimSpecFrame.Visible = false
+        targetAimEspecifico = nil
+        aimSpecStatus.Text = "Status: Nenhum"
+    end
+end)
+
+-- ============================================================================
+-- 10. CRIAR, GERENCIAR E TELEPORTAR PARA PARTES
+-- ============================================================================
+
+local partesCriadas = {}
+local contadorPartes = 0
+
+local gerenciadorFrame, gerenciadorScroll, gerenciadorStatus = criarPainelSelecao("GerenciadorPartesFrame", "🗑️ Gerenciar Partes", 125)
+local tpPartesFrame, tpPartesScroll, tpPartesStatus = criarPainelSelecao("TPPartesFrame", "🌀 Teleportar p/ Partes", 125)
+
+local gerenciadorAtivo = false
+local tpPartesAtivo = false
+
+local function atualizarListaGerenciarPartes()
+    for _, child in ipairs(gerenciadorScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for id, dadosParte in pairs(partesCriadas) do
+        totalItems = totalItems + 1
+        local pBtn = Instance.new("TextButton")
+        pBtn.Size = UDim2.new(1, -8, 0, 26)
+        pBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        pBtn.Text = "Deletar: " .. dadosParte.Nome
+        pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        pBtn.TextSize = 11
+        pBtn.Font = Enum.Font.SourceSansBold
+        pBtn.Parent = gerenciadorScroll
+
+        local pCorner = Instance.new("UICorner")
+        pCorner.CornerRadius = UDim.new(0, 4)
+        pCorner.Parent = pBtn
+
+        pBtn.MouseButton1Click:Connect(function()
+            if dadosParte.Instance then
+                dadosParte.Instance:Destroy()
+            end
+            partesCriadas[id] = nil
+            gerenciadorStatus.Text = "Deletada: " .. dadosParte.Nome
+            atualizarListaGerenciarPartes()
+            if tpPartesAtivo then atualizarListaTPPartes() end
+        end)
+    end
+
+    gerenciadorScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+function atualizarListaTPPartes()
+    for _, child in ipairs(tpPartesScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local totalItems = 0
+    for id, dadosParte in pairs(partesCriadas) do
+        totalItems = totalItems + 1
+        local pBtn = Instance.new("TextButton")
+        pBtn.Size = UDim2.new(1, -8, 0, 26)
+        pBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+        pBtn.Text = "Ir para: " .. dadosParte.Nome
+        pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        pBtn.TextSize = 11
+        pBtn.Font = Enum.Font.SourceSansBold
+        pBtn.Parent = tpPartesScroll
+
+        local pCorner = Instance.new("UICorner")
+        pCorner.CornerRadius = UDim.new(0, 4)
+        pCorner.Parent = pBtn
+
+        pBtn.MouseButton1Click:Connect(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp and dadosParte.Instance then
+                hrp.CFrame = dadosParte.Instance.CFrame + Vector3.new(0, 3, 0)
+                tpPartesStatus.Text = "Teleportado: " .. dadosParte.Nome
+            end
+        end)
+    end
+
+    tpPartesScroll.CanvasSize = UDim2.new(0, 0, 0, totalItems * 30)
+end
+
+local function criarNovaParteInstancia(cframePosicao)
+    contadorPartes = contadorPartes + 1
+    local nomeParte = "parte " .. contadorPartes
+
+    local novaParte = Instance.new("Part")
+    novaParte.Name = nomeParte
+    novaParte.Size = Vector3.new(4, 1, 4)
+    novaParte.CFrame = cframePosicao
+    novaParte.Anchored = true
+    novaParte.CanCollide = false
+    novaParte.Material = Enum.Material.Neon
+    novaParte.Color = Color3.fromRGB(0, 255, 200)
+    novaParte.Transparency = 0.4
+    novaParte.Parent = workspace
+
+    local bb = Instance.new("BillboardGui")
+    bb.Size = UDim2.new(0, 100, 0, 20)
+    bb.StudsOffset = Vector3.new(0, 2, 0)
+    bb.AlwaysOnTop = true
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = nomeParte
+    txt.TextColor3 = Color3.fromRGB(0, 255, 200)
+    txt.TextSize = 12
+    txt.Font = Enum.Font.SourceSansBold
+    txt.Parent = bb
+    bb.Parent = novaParte
+
+    partesCriadas[contadorPartes] = {
+        Nome = nomeParte,
+        Instance = novaParte
+    }
+
+    if gerenciadorAtivo then atualizarListaGerenciarPartes() end
+    if tpPartesAtivo then atualizarListaTPPartes() end
+end
+
+btnCriarParte.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    criarNovaParteInstancia(hrp.CFrame - Vector3.new(0, 2.5, 0))
+end)
+
+btnGerenciarPartes.MouseButton1Click:Connect(function()
+    gerenciadorAtivo = not gerenciadorAtivo
+    if gerenciadorAtivo then
+        btnGerenciarPartes.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaGerenciarPartes()
+        gerenciadorFrame.Visible = true
+    else
+        btnGerenciarPartes.BackgroundColor3 = Color3.fromRGB(200, 80, 40)
+        gerenciadorFrame.Visible = false
+    end
+end)
+
+btnTPPartes.MouseButton1Click:Connect(function()
+    tpPartesAtivo = not tpPartesAtivo
+    if tpPartesAtivo then
+        btnTPPartes.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        atualizarListaTPPartes()
+        tpPartesFrame.Visible = true
+    else
+        btnTPPartes.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+        tpPartesFrame.Visible = false
+    end
+end)
+
+Players.PlayerAdded:Connect(function()
+    if viewAtivo then atualizarListaView() end
+    if spEspecificoAtivo then atualizarListaSPEspecifico() end
+    if aimEspecificoAtivo then atualizarListaAimEspecifico() end
+    if tpPlayerFrame.Visible then atualizarListaTPJogador() end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if p == targetSPEspecifico then targetSPEspecifico = nil end
+    if p == targetAimEspecifico then targetAimEspecifico = nil end
+
+    if viewAtivo then atualizarListaView() end
+    if spEspecificoAtivo then atualizarListaSPEspecifico() end
+    if aimEspecificoAtivo then atualizarListaAimEspecifico() end
+    if tpPlayerFrame.Visible then atualizarListaTPJogador() end
+end)
+
+-- ============================================================================
+-- 11. FREECAM & UTILIDADES
+-- ============================================================================
+
+local freecamAtivo = false
+local freecamCF = CFrame.new()
+local freecamSpeed = 1.2
+local rotX, rotY = 0, 0
+local freecamConnection = nil
+
+local freecamTouchPad = Instance.new("Frame")
+freecamTouchPad.Name = "FreecamControls"
+freecamTouchPad.Size = UDim2.new(0, 150, 0, 120)
+freecamTouchPad.Position = UDim2.new(0.02, 0, 0.65, 0)
+freecamTouchPad.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+freecamTouchPad.BackgroundTransparency = 0.3
+freecamTouchPad.Visible = false
+freecamTouchPad.Parent = screenGui
+
+local fcCorner = Instance.new("UICorner")
+fcCorner.CornerRadius = UDim.new(0, 8)
+fcCorner.Parent = freecamTouchPad
+
+local moveDir = Vector3.new(0, 0, 0)
+
+local function criarBotaoFC(texto, pos, size, dir)
+    local b = Instance.new("TextButton")
+    b.Size = size
+    b.Position = pos
+    b.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    b.Text = texto
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = 14
+    b.Font = Enum.Font.SourceSansBold
+    b.Parent = freecamTouchPad
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 4)
+    c.Parent = b
+
+    b.MouseButton1Down:Connect(function() moveDir = moveDir + dir end)
+    b.MouseButton1Up:Connect(function() moveDir = moveDir - dir end)
+    return b
+end
+
+criarBotaoFC("▲", UDim2.new(0.36, 0, 0.05, 0), UDim2.new(0.28, 0, 0.28, 0), Vector3.new(0, 0, -1))
+criarBotaoFC("▼", UDim2.new(0.36, 0, 0.67, 0), UDim2.new(0.28, 0, 0.28, 0), Vector3.new(0, 0, 1))
+criarBotaoFC("◄", UDim2.new(0.05, 0, 0.36, 0), UDim2.new(0.28, 0, 0.28, 0), Vector3.new(-1, 0, 0))
+criarBotaoFC("►", UDim2.new(0.67, 0, 0.36, 0), UDim2.new(0.28, 0, 0.28, 0), Vector3.new(1, 0, 0))
+
+criarBotaoFC("Subir", UDim2.new(0.05, 0, 0.05, 0), UDim2.new(0.28, 0, 0.25, 0), Vector3.new(0, 1, 0))
+criarBotaoFC("Descer", UDim2.new(0.67, 0, 0.05, 0), UDim2.new(0.28, 0, 0.25, 0), Vector3.new(0, -1, 0))
+
+local touchStartPos = nil
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if freecamAtivo and not gpe then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            touchStartPos = input.Position
+        end
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input, gpe)
+    if freecamAtivo and touchStartPos then
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - touchStartPos
+            touchStartPos = input.Position
+            rotY = rotY - delta.X * 0.004
+            rotX = math.clamp(rotX - delta.Y * 0.004, math.rad(-85), math.rad(85))
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        touchStartPos = nil
+    end
+end)
+
+local function alternarFreecam()
+    freecamAtivo = not freecamAtivo
+
+    if freecamAtivo then
+        btnFreecam.Text = "Freecam (Câmera Livre): ON"
+        btnFreecam.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        freecamTouchPad.Visible = true
+
+        local currentCF = Camera.CFrame
+        freecamCF = currentCF
+        local rx, ry, _ = currentCF:ToOrientation()
+        rotX = rx
+        rotY = ry
+
+        Camera.CameraType = Enum.CameraType.Scriptable
+
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+        end
+
+        freecamConnection = RunService.RenderStepped:Connect(function()
+            local kbDir = Vector3.new(0, 0, 0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then kbDir = kbDir + Vector3.new(0, 0, -1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then kbDir = kbDir + Vector3.new(0, 0, 1) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then kbDir = kbDir + Vector3.new(-1, 0, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then kbDir = kbDir + Vector3.new(1, 0, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.E) then kbDir = kbDir + Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Q) then kbDir = kbDir + Vector3.new(0, -1, 0) end
+
+            local totalDir = moveDir + kbDir
+            local rotCFrame = CFrame.Angles(0, rotY, 0) * CFrame.Angles(rotX, 0, 0)
+            
+            local moveVector = rotCFrame:VectorToWorldSpace(totalDir) * freecamSpeed
+            freecamCF = CFrame.new(freecamCF.Position + moveVector) * rotCFrame
+
+            Camera.CFrame = freecamCF
+        end)
+    else
+        btnFreecam.Text = "Freecam (Câmera Livre): OFF"
+        btnFreecam.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        freecamTouchPad.Visible = false
+
+        if freecamConnection then
+            freecamConnection:Disconnect()
+            freecamConnection = nil
+        end
+
+        Camera.CameraType = Enum.CameraType.Custom
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            Camera.CameraSubject = hum
+            hum.WalkSpeed = 16
+            hum.JumpPower = 50
+        end
+    end
+end
+
+btnFreecam.MouseButton1Click:Connect(alternarFreecam)
+
+local noclipAtivo = false
+local noclipConnection = nil
+
+local function alternarNoclip()
+    noclipAtivo = not noclipAtivo
+    if noclipAtivo then
+        btnNoclip.Text = "Noclip Geral: ON"
+        btnNoclip.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+
+        noclipConnection = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    else
+        btnNoclip.Text = "Noclip Geral: OFF"
+        btnNoclip.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+
+        if LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+btnNoclip.MouseButton1Click:Connect(alternarNoclip)
+
+btnOuro.MouseButton1Click:Connect(function()
+    local prateleiras = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Sistemas") and workspace.Map.Sistemas:FindFirstChild("Roubos") and workspace.Map.Sistemas.Roubos.Banco:FindFirstChild("Prateleiras")
+    if prateleiras then
+        for _, objeto in ipairs(prateleiras:GetDescendants()) do
+            if objeto:IsA("ProximityPrompt") then
+                local barra = objeto.Parent
+                if barra and barra.Name == "BarraDeOuro" then
+                    objeto.HoldDuration = 0
+                end
+            end
+        end
+    end
+end)
+
+btnTP.MouseButton1Click:Connect(function()
+    local areaEntrega = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Sistemas") and workspace.Map.Sistemas:FindFirstChild("Jobs") and workspace.Map.Sistemas.Jobs:FindFirstChild("Caixas") and workspace.Map.Sistemas.Jobs.Caixas.LocalEntrega:FindFirstChild("AreaEntrega")
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+    if areaEntrega and hrp then
+        hrp.CFrame = areaEntrega.CFrame + Vector3.new(0, 3, 0)
+    end
+end)
+
+btnTPTool.MouseButton1Click:Connect(function()
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then return end
+
+    if backpack:FindFirstChild("TP Tool") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("TP Tool")) then
+        return
+    end
+
+    local tpTool = Instance.new("Tool")
+    tpTool.Name = "TP Tool"
+    tpTool.RequiresHandle = false
+
+    tpTool.Activated:Connect(function()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp and Mouse.Hit then
+            hrp.CFrame = CFrame.new(Mouse.Hit.Position + Vector3.new(0, 3, 0))
+        end
+    end)
+
+    tpTool.Parent = backpack
+end)
+
+btnPartTool.MouseButton1Click:Connect(function()
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not backpack then return end
+
+    if backpack:FindFirstChild("Part Tool") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Part Tool")) then
+        return
+    end
+
+    local partTool = Instance.new("Tool")
+    partTool.Name = "Part Tool"
+    partTool.RequiresHandle = false
+
+    partTool.Activated:Connect(function()
+        if Mouse.Hit then
+            criarNovaParteInstancia(CFrame.new(Mouse.Hit.Position + Vector3.new(0, 0.5, 0)))
+        end
+    end)
+
+    partTool.Parent = backpack
+end)
+
+-- ============================================================================
+-- 12. LOOP PRINCIPAL DE PROCESSAMENTO (AIMBOT & ESP)
+-- ============================================================================
+
+local aimAtivo = false
+local aimModo = "Descarado"
+local targetDisfarcado = nil
+
+local function obterJogadorMaisProximo()
+    local myChar = LocalPlayer.Character
+    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil, math.huge end
+
+    local menorDistancia = math.huge
+    local jogadorMaisProximo = nil
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if ehInimigo(player) and player.Character then
+            local targetHrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local targetHum = player.Character:FindFirstChildOfClass("Humanoid")
+            
+            if targetHrp and targetHum and targetHum.Health > 0 then
+                local dist = (myHrp.Position - targetHrp.Position).Magnitude
+                if dist < menorDistancia then
+                    menorDistancia = dist
+                    jogadorMaisProximo = player
+                end
+            end
+        end
+    end
+
+    return jogadorMaisProximo, menorDistancia
+end
+
+btnAimDescarado.MouseButton1Click:Connect(function()
+    aimModo = "Descarado"
+    btnAimDescarado.Text = "[X] Modo: Descarado"
+    btnAimDisfarcado.Text = "Modo: Disfarçado"
+end)
+
+btnAimDisfarcado.MouseButton1Click:Connect(function()
+    aimModo = "Disfarcado"
+    btnAimDescarado.Text = "Modo: Descarado"
+    btnAimDisfarcado.Text = "[X] Modo: Disfarçado"
+    local closest, _ = obterJogadorMaisProximo()
+    targetDisfarcado = closest
+end)
+
+btnAim.MouseButton1Click:Connect(function()
+    aimAtivo = not aimAtivo
+    if aimAtivo then
+        btnAim.Text = "Mira Auto: ON (" .. aimModo .. ")"
+        btnAim.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        if aimModo == "Disfarcado" then
+            local closest, _ = obterJogadorMaisProximo()
+            targetDisfarcado = closest
+        end
+    else
+        btnAim.Text = "Mira Auto: OFF"
+        btnAim.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    end
+end)
+
+btnAimUpdate.MouseButton1Click:Connect(function()
+    local closest, _ = obterJogadorMaisProximo()
+    targetDisfarcado = closest
+end)
+
+local espAtivo = false
+local espObjects = {}
+
+local function obterCorJogador(player)
+    if player.Team and player.Team.TeamColor then
+        return player.Team.TeamColor.Color
+    elseif player.TeamColor then
+        return player.TeamColor.Color
+    end
+    return Color3.fromRGB(255, 50, 50)
+end
+
+local function limparESPJogador(player)
+    if espObjects[player] then
+        if espObjects[player].Highlight then espObjects[player].Highlight:Destroy() end
+        if espObjects[player].Billboard then espObjects[player].Billboard:Destroy() end
+        espObjects[player] = nil
+    end
+end
+
+local function criarESPJogador(player)
+    if player == LocalPlayer then return end
+    limparESPJogador(player)
+
+    local char = player.Character
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local head = char:FindFirstChild("Head")
+    if not hrp or not head then return end
+
+    local corTime = obterCorJogador(player)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Highlight"
+    highlight.Adornee = char
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = corTime
+    highlight.FillTransparency = 0.65
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.2
+    highlight.Parent = char
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESP_Billboard"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 150, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = corTime
+    textLabel.TextStrokeTransparency = 0.2
+    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.TextSize = 12
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.Text = player.DisplayName .. "\n[0m]"
+    textLabel.Parent = billboard
+
+    billboard.Parent = head
+
+    espObjects[player] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Label = textLabel
+    }
+end
+
+local function limparTodosESPs()
+    for player, _ in pairs(espObjects) do
+        limparESPJogador(player)
+    end
+end
+
+btnESP.MouseButton1Click:Connect(function()
+    espAtivo = not espAtivo
+    if espAtivo then
+        btnESP.Text = "SP/ESP Geral: ON"
+        btnESP.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+        hudMaisProximo.Visible = true
+    else
+        btnESP.Text = "SP/ESP Geral: OFF"
+        btnESP.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+        hudMaisProximo.Visible = false
+        tracerFrame.Visible = false
+        limparTodosESPs()
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local myChar = LocalPlayer.Character
+    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local closestPlayer, closestDist = obterJogadorMaisProximo()
+
+    if closestPlayer then
+        hudMaisProximo.Text = string.format("%s\n[%dm]", closestPlayer.DisplayName, math.floor(closestDist))
+    else
+        hudMaisProximo.Text = "Mais Próximo: Nenhum"
+    end
+
+    if not freecamAtivo then
+        -- LÓGICA DO AIMBOT MELHORADO (SUAVE / HOLD)
+        if segurandoMiraMelhorada and closestPlayer and closestPlayer.Character then
+            local head = closestPlayer.Character:FindFirstChild("Head")
+            local hum = closestPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if head and hum and hum.Health > 0 then
+                local targetCFrame = CFrame.new(Camera.CFrame.Position, head.Position)
+                -- Transição suave da câmera usando Lerp (fator 0.20 para transição fluida)
+                Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.20)
+            end
+
+        -- DEMAIS MODOS DE AIMBOT
+        elseif aimEspecificoAtivo and targetAimEspecifico then
+            if targetAimEspecifico.Parent and targetAimEspecifico.Character then
+                local head = targetAimEspecifico.Character:FindFirstChild("Head")
+                local hum = targetAimEspecifico.Character:FindFirstChildOfClass("Humanoid")
+                if head and hum and hum.Health > 0 then
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, head.Position)
+                end
+            end
+        elseif aimAtivo then
+            local targetPlayer = nil
+            if aimModo == "Descarado" then
+                targetPlayer = closestPlayer
+            elseif aimModo == "Disfarcado" then
+                if targetDisfarcado and targetDisfarcado.Parent and targetDisfarcado.Character then
+                    local hum = targetDisfarcado.Character:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        targetPlayer = targetDisfarcado
+                    else
+                        targetDisfarcado = nil
+                    end
+                else
+                    targetDisfarcado = nil
+                end
+            end
+
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Head") then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPlayer.Character.Head.Position)
+            end
+        end
+    end
+
+    if spEspecificoAtivo then
+        for player, _ in pairs(espObjects) do
+            if player ~= targetSPEspecifico then
+                limparESPJogador(player)
+            end
+        end
+
+        if targetSPEspecifico and targetSPEspecifico.Character then
+            local char = targetSPEspecifico.Character
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local targetHrp = char:FindFirstChild("HumanoidRootPart")
+            
+            if hum and hum.Health > 0 and targetHrp then
+                if not espObjects[targetSPEspecifico] or not espObjects[targetSPEspecifico].Highlight or espObjects[targetSPEspecifico].Highlight.Parent ~= char then
+                    criarESPJogador(targetSPEspecifico)
+                end
+
+                local data = espObjects[targetSPEspecifico]
+                if data and myHrp then
+                    local dist = (myHrp.Position - targetHrp.Position).Magnitude
+                    data.Label.Text = string.format("%s\n[%dm]", targetSPEspecifico.DisplayName, math.floor(dist))
+                    data.Highlight.FillColor = Color3.fromRGB(255, 255, 0)
+                    data.Label.TextColor3 = Color3.fromRGB(255, 255, 0)
+                end
+
+                local head = char:FindFirstChild("Head")
+                if head then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local centroInferior = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                        desenharLinha(centroInferior, Vector2.new(screenPos.X, screenPos.Y))
+                    else
+                        tracerFrame.Visible = false
+                    end
+                end
+            else
+                limparESPJogador(targetSPEspecifico)
+                tracerFrame.Visible = false
+            end
+        else
+            tracerFrame.Visible = false
+        end
+
+    elseif espDistanciaAtivo then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if ehInimigo(player) then
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Head") and myHrp then
+                    local dist = (myHrp.Position - char.HumanoidRootPart.Position).Magnitude
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+
+                    if dist <= maxMetrosESP and hum and hum.Health > 0 then
+                        if not espObjects[player] or not espObjects[player].Highlight or espObjects[player].Highlight.Parent ~= char then
+                            criarESPJogador(player)
+                        end
+                    else
+                        limparESPJogador(player)
+                    end
+                else
+                    limparESPJogador(player)
+                end
+            else
+                limparESPJogador(player)
+            end
+        end
+
+        for player, data in pairs(espObjects) do
+            if player.Parent and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetHrp = player.Character.HumanoidRootPart
+                local eMaisProximo = (player == closestPlayer)
+                local corUsar = eMaisProximo and Color3.fromRGB(0, 255, 255) or obterCorJogador(player)
+
+                data.Highlight.FillColor = corUsar
+                data.Label.TextColor3 = corUsar
+                if myHrp then
+                    local dist = (myHrp.Position - targetHrp.Position).Magnitude
+                    data.Label.Text = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
+                end
+            else
+                limparESPJogador(player)
+            end
+        end
+
+    elseif espAtivo then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if ehInimigo(player) then
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Head") then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.Health > 0 then
+                        if not espObjects[player] or not espObjects[player].Highlight or espObjects[player].Highlight.Parent ~= char then
+                            criarESPJogador(player)
+                        end
+                    else
+                        limparESPJogador(player)
+                    end
+                else
+                    limparESPJogador(player)
+                end
+            else
+                limparESPJogador(player)
+            end
+        end
+
+        for player, data in pairs(espObjects) do
+            if player.Parent and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetHrp = player.Character.HumanoidRootPart
+                local eMaisProximo = (player == closestPlayer)
+                local corUsar = eMaisProximo and Color3.fromRGB(0, 255, 255) or obterCorJogador(player)
+
+                data.Highlight.FillColor = corUsar
+                data.Label.TextColor3 = corUsar
+                if myHrp then
+                    local dist = (myHrp.Position - targetHrp.Position).Magnitude
+                    data.Label.Text = string.format("%s\n[%dm]", player.DisplayName, math.floor(dist))
+                end
+            else
+                limparESPJogador(player)
+            end
+        end
+    end
+end)
